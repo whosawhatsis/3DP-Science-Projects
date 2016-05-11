@@ -1,0 +1,3 @@
+These models (and the science behind them) are described in detail in our book, "3D Printed Science Projects" from Apress (http://www.amazon.com/dp/1484213246/). The book describes the science or engineering behind the models, and talks about how to change parameters for some of the OpenSCAD files to reflect other physical phenomena. Note though that in many cases the models are simplifications and approximations of complex phenomena and are intended for basic educational purposes-- we do not warrant their fitness for any purpose.
+
+These models are licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license.
