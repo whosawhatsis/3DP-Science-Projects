@@ -13,6 +13,13 @@ taper = 1; // taper ratio: ratio of chord at root to chord at tip
 sweep = 0; // if wing is swept , sweep angle in degrees ; if 0, no sweep
 
 
+a = (NACA - NACA % 1000) / 100000;
+b = (NACA % 1000 - NACA % 100) / 1000;
+cd = NACA % 100;
+
+echo("a", a);
+echo("b", b);
+echo("cd", cd);
 if((taper == 1 || taper == 0) && sweep != 0) 
 echo("ERROR: Sweep without taper is not currently supported!");
 
@@ -71,12 +78,21 @@ module airfoil(
 //Create the cross-section by hulling a series of rhomboids bisected by a tangent 
 // to the camber line with a height equal to half the wing thickness 
 
+// Original version described in the text (superseded below)
 module airfoil_cross_section(p, chord)
     for(x_ = [step / 10:step:1 - step])
         hull() for(x = [x_, x_ + step]) {
             translate([x * chord, camber(x, p) * chord, 0]) rotate(theta(x, p))
                 scale([chord * step / 10, thickness(x, p) * chord]) circle($fn = 4);
-            translate([x * chord, camber_(x, p) * chord, 0]) rotate(theta(x, p)) 
-                scale([chord * step / 2, chord * step / 2]) #%circle(r = 2, $fn = 4);
+            translate([x * chord, camber_(x, p) * chord, 0]) rotate(theta(x, p))
+                scale([chord * step / 2, chord * step / 2]) #%circle($fn = 4);
         }
+
+// Optimized version
+module airfoil_cross_section(p, chord) {
+    polygon(concat(
+        [for(x = [0:step:1]) chord * [x - thickness(x, p) * sin(theta(x, p)), camber(x, p) + thickness(x, p) * cos(theta(x, p))]], 
+        [for(x = [1:-step:0]) chord * [x + thickness(x, p) * sin(theta(x, p)), camber(x, p) - thickness(x, p) * cos(theta(x, p))]]
+    ));
+}
 //End of model

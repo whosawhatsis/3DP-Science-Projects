@@ -20,9 +20,17 @@ sting_length = 100; // sting vertical and horizonal bar length, in mm
 
 sting_angle = [0:5:25]; //range of angle of attack possible 
 
+tolerance = .3;
 nest = false; //Attempt to nest parts for printing, may not fit with certain options
 
- 
+
+a = (NACA - NACA % 1000) / 100000;
+b = (NACA % 1000 - NACA % 100) / 1000;
+cd = NACA % 100;
+
+echo("a", a);
+echo("b", b);
+echo("cd", cd);
 if((taper == 1 || taper == 0) && sweep != 0) echo("ERROR: Sweep without taper is not currently supported!");
 
 step = 1/500;
@@ -88,12 +96,21 @@ module airfoil(
 // centered on the camber line
 // with a height equal to half the wing thickness 
 
+// Original version described in the text (superseded below)
 module airfoil_cross_section(p, chord) for(x_ = [step / 10:step:1 - step])
     hull() for(x = [x_, x_ + step]) {
         translate([x * chord, camber(x, p) * chord, 0]) rotate(theta(x, p))
             scale([chord * step / 10, thickness(x, p) * chord]) circle($fn = 4);
         translate([x * chord, camber_(x, p) * chord, 0]) rotate(theta(x, p))
             scale([chord * step / 2, chord * step / 2]) %circle($fn = 4);
+}
+
+// Optimized version
+module airfoil_cross_section(p, chord) {
+    polygon(concat(
+        [for(x = [0:step:1]) chord * [x - thickness(x, p) * sin(theta(x, p)), camber(x, p) + thickness(x, p) * cos(theta(x, p))]], 
+        [for(x = [1:-step:0]) chord * [x + thickness(x, p) * sin(theta(x, p)), camber(x, p) - thickness(x, p) * cos(theta(x, p))]]
+    ));
 }
 
 
@@ -157,7 +174,7 @@ module base() {
             circle(50 - 2);
             for(i = sting_angle) rotate(-i) hull() {
                 circle(r = sting_size / 2 + 3);
-                translate([-50, 0, 0]) circle(r = 1.1);
+                translate([-50, 0, 0]) circle(r = 1 + tolerance);
             }
         }
         for(i = sting_angle) rotate(-i) hull() for(j = [1, -1])
@@ -206,8 +223,8 @@ module base() {
         }
     }
     hull() {
-        cylinder(r = (sting_size/2 - 4) * cos(180 / 8) - .2, h = sting_size - 2);
-        cylinder(r = (sting_size/2 - 4) * cos(180 / 8) - .2 - 1, h = sting_size);
+        cylinder(r = (sting_size/2 - 4) * cos(180 / 8) - tolerance, h = sting_size - 2);
+        cylinder(r = (sting_size/2 - 4) * cos(180 / 8) - tolerance - 1, h = sting_size);
     }
 }
 //End model
