@@ -90,7 +90,7 @@ module airfoil(
 
 module airfoil_cross_section(p, chord) for(x_ = [step / 10:step:1 - step])
     hull() for(x = [x_, x_ + step]) {
-        translate([x * chord, camber(x, p) * chord, 0]) rotate(theta(x))
+        translate([x * chord, camber(x, p) * chord, 0]) rotate(theta(x, p))
             scale([chord * step / 10, thickness(x, p) * chord]) circle($fn = 4);
         translate([x * chord, camber_(x, p) * chord, 0]) rotate(theta(x, p))
             scale([chord * step / 2, chord * step / 2]) %circle($fn = 4);
