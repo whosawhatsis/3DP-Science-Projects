@@ -1,77 +1,107 @@
-// OpenSCAD program to print out an arbitrary surface defined as z = f(x,y)
- // Either prints the surface as two sided and variable thick = thickness
- // Or if thick = 0, prints a top surface with a flat bottom
- // File multipleWaves.scad
+//OpenSCAD model to print out an arbitrary surface, z = f(x,y)
+//Either prints the surface two-sided with t = thickness
+//Or if t = 0, prints a top surface with a flat bottom
+//File multipleWaves.scad
+//(c) 2016-2024 Rich Cameron
+//for the book 3D Printed Science projects, Volume 1
+//Based on triangleMeshSurface.scad
+//from github.com/whosawhatsis/Calculus
+//Licensed under a Creative Commons, Attribution,
+//CC-BY 4.0 international license, per
+//https://creativecommons.org/licenses/by/4.0/
+//Attribute to Rich Cameron, at
+//repository github.com/whosawhatsis/3DP-Science-Projects
 
-factor =1;
-lambda=4;
- xc1 = 49.5 -10;
- xc2 = 49.5 + 10;
+//Thickness along z axis. t = 0 gives a flat base at z = 0
+t = 0;
+//Range of [x, y] values to graph
+range = [100, 100];
+//resolution in mm (smaller = smoother, but slower render)
+res = .25;
+blockymode = false;
 
- function radius(x,y, xc, yc) = sqrt( (x-xc)*(x-xc) + (y-yc)*(y-yc) );
- function f(x, y) =  factor* pow ( (cos( (360/lambda)*radius(x,y,xc1,0) ) + cos( (360/lambda)*radius(x,y,xc2,0) ) ),2) +2;
- //You are computing sin ( (2*PI/lambda) * (180/PI) r); equation above simplifies to get (360*r/lambda). OpenSCAD presumes degrees. 
- 
- //z height, in mm
+factor = 0.5;
+lambda = 4;
+xc1 = 50 - 8;
+xc2 = 50 + 8;
+function f(x, y) = factor * 
+    (cos((360 / lambda) * r(x, y, xc1, 0)) +
+    cos((360 / lambda) * r(x, y, xc2, 0))
+) + 5;
 
-thick = 0; //set to 0 for flat bottom. else mm thickness of surface
-xmax = 99; //Number of points in x direction - can be more than 99 if we do not use blocky=true
-ymax = 99; // Number of points in y direction -  can be more than 99 if we do not use blocky=true
+s = [
+  round((range[0] - res/2) / res),
+  round(range[1] / res * 2 / sqrt(3))
+];
+seg = [range[0] / (s[0] - .5), range[1] / s[1]];
 
-// If you want a rough surface (to make it more tactile) set blocky=true. 
-// Otherwise surface will be smoothed
-blocky = false; //if true, xmax and ymax must be less than 100.
+function r(x, y, cx = range[0]/2, cy = range[1]/2) =
+  sqrt(pow(cx - x, 2) + pow(cy - y, 2));
+function theta(x, y, cx = range[0]/2, cy = range[1]/2) =
+  atan2((cy - y), (cx - x));
+function zeronan(n) = (n == n) ? n : 0;
 
-//number of points that will be plotted
-toppoints = (xmax + 1) * (ymax + 1);
-
-//next section generates the points in the arriay
 points = concat(
-	[for(y = [0:ymax], x = [0:xmax]) [x, y, f(x, y)]], // top face
-	(thick ? //bottom face
-		[for(y = [0:ymax], x = [0:xmax]) [x, y, f(x, y) - thick]] : 
-		[for(y = [0:ymax], x = [0:xmax]) [x, y, 0]]
-	)
+  [for(y = [0:s[1]], x = [0:s[0]]) [
+    seg[0] * min(max(x - (y % 2) * .5, 0), s[0] - .5),
+    seg[1] * y,
+    zeronan(
+      f(
+        seg[0] * min(max(x - (y % 2) * .5, 0), s[0] - .5),
+        seg[1] * y
+      )
+    )
+  ]], [for(y = [0:s[1]], x = [0:s[0]]) [
+    seg[0] * min(max(x - (y % 2) * .5, 0), s[0] - .5),
+    seg[1] * y,
+    t ? zeronan(
+      f(
+        seg[0] * min(max(x - (y % 2) * .5, 0), s[0] - .5),
+        seg[1] * y
+      )
+    ) - t : 0
+  ]]
+);
+*for(i = points) translate(i) cube(.1, center = true);
+  
+function order(point, reverse) = [
+  for(i = [0:2]) point[reverse ? 2 - i : i]
+];
+function mirror(points, offset) = [
+  for(i = [0, 1], point = points)
+    order(
+      point + (i ? [0, 0, 0] : [offset, offset, offset]),
+      i
+    )
+];
+
+polys = concat(
+  mirror(concat([
+    for(x = [0:s[0] - 1], y = [0:s[1] - 1]) [
+      x + (s[0] + 1) * y,
+      x + 1 + (s[0] + 1) * y,
+      x + 1 - (y % 2) + (s[0] + 1) * (y + 1)
+    ]
+  ], [
+    for(x = [0:s[0] - 1], y = [0:s[1] - 1]) [
+      x + (y % 2) + (s[0] + 1) * y,
+      x + 1 + (s[0] + 1) * (y + 1),
+      x + (s[0] + 1) * (y + 1)
+    ]
+  ]), len(points) / 2),
+  mirror([for(x = [0:s[0] - 1], i = [0, 1]) order([
+    x + (i ? 0 : 1 + len(points) / 2),
+    x + 1,
+    x + len(points) / 2
+  ], i)], len(points) / 2 - s[0] - 1),
+  mirror([for(y = [0:s[1] - 1], i = [0, 1]) order([
+    y * (s[0] + 1) + (i ? 0 : (s[0] + 1) + len(points) / 2),
+    y * (s[0] + 1) + (s[0] + 1),
+    y * (s[0] + 1) + len(points) / 2
+  ], 1 - i)], s[0])
 );
 
-zbounds = [min([for(i = points) i[2]]), max([for(i = points) i[2]])];
-	
-//create triangles from quad
-function quad(a, b, c, d, r = false) = r ? [[a, b, c], [c, d, a]] : [[c, b, a], [a, d, c]]; 
-
-faces = concat(
-      //build top and bottom
-	[for(bottom = [0, toppoints], i = [for(x = [0:xmax - 1], y = [0:ymax - 1]) 
-		quad(
-			x + (xmax + 1) * (y + 1) + bottom,
-			x + (xmax + 1) * y + bottom,
-			x + 1 + (xmax + 1) * y + bottom,
-			x + 1 + (xmax + 1) * (y + 1) + bottom,
-			bottom
-		)], v = i) v],
-	[for(i = [for(x = [0, xmax], y = [0:ymax - 1]) //build left and right
-		quad(
-			x + (xmax + 1) * y + toppoints,
-			x + (xmax + 1) * y,
-			x + (xmax + 1) * (y + 1),
-			x + (xmax + 1) * (y + 1) + toppoints,
-			x
-		)], v = i) v],
-	[for(i = [for(x = [0:xmax - 1], y = [0, ymax]) //build front and back
-		quad(
-			x + (xmax + 1) * y + toppoints,
-			x + 1 + (xmax + 1) * y+ toppoints,
-			x + 1 + (xmax + 1) * y,
-			x + (xmax + 1) * y,
-			y
-		)], v = i) v]
-);
-
-//Now either generate the surface as discrete cuboids
-// or smoothly with the polyhedron function
-
-if(blocky) for(i = [0:toppoints - 1]) translate(points[toppoints + i]) cube([1.001, 1.001, points[i][2] - points[toppoints + i][2]]);
-else polyhedron(points, faces);
-
-echo(zbounds);
-// end of code listing.
+if(blockymode)
+  for(x = [0:res:range[0]], y = [0:res:range[1]])
+    translate([x, y, 0]) cube([res, res, f(x, y)]);
+else polyhedron(points, polys, convexity = 5);

@@ -1,83 +1,120 @@
-// OpenSCAD program to print out an arbitrary surface defined as z = f(x,y)
- // Either prints the surface as two sided and variable thick = thickness
- // Or if thick = 0, prints a top surface with a flat bottom
- 
+//OpenSCAD model to print out an arbitrary surface, z = f(x,y)
+//Either prints the surface two-sided with t = thickness
+//Or if t = 0, prints a top surface with a flat bottom
 //File twoSlits.scad
- 
+//(c) 2016-2024 Rich Cameron
+//for the book 3D Printed Science projects, Volume 1
+//Based on triangleMeshSurface.scad
+//from github.com/whosawhatsis/Calculus
+//Licensed under a Creative Commons, Attribution,
+//CC-BY 4.0 international license, per
+//https://creativecommons.org/licenses/by/4.0/
+//Attribute to Rich Cameron, at
+//repository github.com/whosawhatsis/3DP-Science-Projects
 
-lambda = 4; //wavelength, same units as slit
-slit = lambda * 2; // width of slit
-slit_separation = lambda* 4; //distance between slits 
-c = 49.5; //center of slit pair
-factor = 20; //scaling factor, for visiblity 
+//Thickness along z axis. t = 0 gives a flat base at z = 0
+t = 0;
+//Range of [x, y] values to graph
+range = [100, 100];
+//resolution in mm (smaller = smoother, but slower render)
+res = .16;
+blockymode = false;
 
-function sintheta(x,y) =  (x-c)/sqrt ( (x-c) * (x-c) + y*y);
-function slit_sinc(x,y) =  lambda*sin (180*sintheta(x,y) * slit/lambda)/(PI*slit*sintheta(x,y) ); // note PI/PI goes away inside sin
-function slit_cos(x,y) = cos (180*sintheta(x,y) * slit_separation/lambda);
-function f(x,y) =  factor * pow(slit_sinc(x,y), 2)* pow(slit_cos(x,y),2)+2;  
-    //This function is now the DUAL-slit experiment.                   
- 
- // sinc squared of ( slit * pi* sin (theta)/lambda) 
+//wavelength, same units as slit
+lambda = 4;
+//width of slit
+slit = 8;
+//center of slit
+c = 50;
+//distance between slits
+slit_separation = lambda * 4;
+//scaling factor, for visibility
+factor = 20;
+function sintheta(x, y) = (x - c) / sqrt((x - c)^2 + y^2);
+function slit_sinc(x, y) = lambda *
+  sin(180 * sintheta(x, y) * slit / lambda) /
+  (PI * slit * sintheta(x, y));
+//note PI/PI goes away inside sin
+function slit_cos(x, y) = cos(180 * sintheta(x, y) *
+  slit_separation / lambda);
+function f(x, y) = factor * pow(slit_sinc(x, y), 2) *
+  pow(slit_cos(x, y), 2) + 2;
+//This function is now the DUAL-slit experiment.
+//sinc squared of (slit * pi * sin(theta)/lambda)
 
-thick = 0; //set to 0 for flat bottom. else mm thickness of surface
-xmax = 99; //Number of points in x direction - 99 is the max
-ymax = 99; // Number of points in y direction - 99 is the max
+s = [
+  round((range[0] - res/2) / res),
+  round(range[1] / res * 2 / sqrt(3))
+];
+seg = [range[0] / (s[0] - .5), range[1] / s[1]];
 
-// If you want a rough surface (to make it more tactile) set blocky=true. 
-// Otherwise surface will be smoothed
-blocky = false; //if true, xmax and ymax must be less than 100.
+function r(x, y, cx = range[0]/2, cy = range[1]/2) =
+  sqrt(pow(cx - x, 2) + pow(cy - y, 2));
+function theta(x, y, cx = range[0]/2, cy = range[1]/2) =
+  atan2((cy - y), (cx - x));
+function zeronan(n) = (n == n) ? n : 0;
 
-//number of points that will be plotted
-toppoints = (xmax + 1) * (ymax + 1);
-
-//next section generates the points in the arriay
 points = concat(
-	[for(y = [0:ymax], x = [0:xmax]) [x, y, f(x, y)]], // top face
-	(thick ? //bottom face
-		[for(y = [0:ymax], x = [0:xmax]) [x, y, f(x, y) - thick]] : 
-		[for(y = [0:ymax], x = [0:xmax]) [x, y, 0]]   
-	)
-); 
+  [for(y = [0:s[1]], x = [0:s[0]]) [
+    seg[0] * min(max(x - (y % 2) * .5, 0), s[0] - .5),
+    seg[1] * y,
+    zeronan(
+      f(
+        seg[0] * min(max(x - (y % 2) * .5, 0), s[0] - .5),
+        seg[1] * y
+      )
+    )
+  ]], [for(y = [0:s[1]], x = [0:s[0]]) [
+    seg[0] * min(max(x - (y % 2) * .5, 0), s[0] - .5),
+    seg[1] * y,
+    t ? zeronan(
+      f(
+        seg[0] * min(max(x - (y % 2) * .5, 0), s[0] - .5),
+        seg[1] * y
+      )
+    ) - t : 0
+  ]]
+);
+*for(i = points) translate(i) cube(.1, center = true);
+  
+function order(point, reverse) = [
+  for(i = [0:2]) point[reverse ? 2 - i : i]
+];
+function mirror(points, offset) = [
+  for(i = [0, 1], point = points)
+    order(
+      point + (i ? [0, 0, 0] : [offset, offset, offset]),
+      i
+    )
+];
 
-zbounds = [min([for(i = points) i[2]]), max([for(i = points) i[2]])];
-	
-//create triangles from quad
-function quad(a, b, c, d, r = false) = r ? [[a, b, c], [c, d, a]] : [[c, b, a], [a, d, c]]; 
-
-faces = concat(
-      //build top and bottom
-	[for(bottom = [0, toppoints], i = [for(x = [0:xmax - 1], y = [0:ymax - 1]) 
-		quad(
-			x + (xmax + 1) * (y + 1) + bottom,
-			x + (xmax + 1) * y + bottom,
-			x + 1 + (xmax + 1) * y + bottom,
-			x + 1 + (xmax + 1) * (y + 1) + bottom,
-			bottom
-		)], v = i) v],
-	[for(i = [for(x = [0, xmax], y = [0:ymax - 1]) //build left and right
-		quad(
-			x + (xmax + 1) * y + toppoints,
-			x + (xmax + 1) * y,
-			x + (xmax + 1) * (y + 1),
-			x + (xmax + 1) * (y + 1) + toppoints,
-			x
-		)], v = i) v],
-	[for(i = [for(x = [0:xmax - 1], y = [0, ymax]) //build front and back
-		quad(
-			x + (xmax + 1) * y + toppoints,
-			x + 1 + (xmax + 1) * y+ toppoints,
-			x + 1 + (xmax + 1) * y,
-			x + (xmax + 1) * y,
-			y
-		)], v = i) v]
+polys = concat(
+  mirror(concat([
+    for(x = [0:s[0] - 1], y = [0:s[1] - 1]) [
+      x + (s[0] + 1) * y,
+      x + 1 + (s[0] + 1) * y,
+      x + 1 - (y % 2) + (s[0] + 1) * (y + 1)
+    ]
+  ], [
+    for(x = [0:s[0] - 1], y = [0:s[1] - 1]) [
+      x + (y % 2) + (s[0] + 1) * y,
+      x + 1 + (s[0] + 1) * (y + 1),
+      x + (s[0] + 1) * (y + 1)
+    ]
+  ]), len(points) / 2),
+  mirror([for(x = [0:s[0] - 1], i = [0, 1]) order([
+    x + (i ? 0 : 1 + len(points) / 2),
+    x + 1,
+    x + len(points) / 2
+  ], i)], len(points) / 2 - s[0] - 1),
+  mirror([for(y = [0:s[1] - 1], i = [0, 1]) order([
+    y * (s[0] + 1) + (i ? 0 : (s[0] + 1) + len(points) / 2),
+    y * (s[0] + 1) + (s[0] + 1),
+    y * (s[0] + 1) + len(points) / 2
+  ], 1 - i)], s[0])
 );
 
-//Now either generate the surface as discrete cuboids
-// or smoothly with the polyhedron function
-
-rotate([-90, 0, 0]) if(blocky) for(i = [0:toppoints - 1]) translate(points[toppoints + i]) cube([1.001, 1.001, points[i][2] - points[toppoints + i][2]]);
-else polyhedron(points, faces);
-
-echo(zbounds);
-echo([for(i = points) i[2]]);
-// end of code listing.
+if(blockymode)
+  for(x = [0:res:range[0]], y = [0:res:range[1]])
+    translate([x, y, 0]) cube([res, res, f(x, y)]);
+else polyhedron(points, polys, convexity = 5);
